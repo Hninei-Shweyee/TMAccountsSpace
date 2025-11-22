@@ -1,58 +1,182 @@
 <template>
-  <div class="hello">
-    <h1>{{ msg }}</h1>
-    <p>
-      For a guide and recipes on how to configure / customize this project,<br>
-      check out the
-      <a href="https://cli.vuejs.org" target="_blank" rel="noopener">vue-cli documentation</a>.
-    </p>
-    <h3>Installed CLI Plugins</h3>
-    <ul>
-      <li><a href="https://github.com/vuejs/vue-cli/tree/dev/packages/%40vue/cli-plugin-babel" target="_blank" rel="noopener">babel</a></li>
-      <li><a href="https://github.com/vuejs/vue-cli/tree/dev/packages/%40vue/cli-plugin-eslint" target="_blank" rel="noopener">eslint</a></li>
-    </ul>
-    <h3>Essential Links</h3>
-    <ul>
-      <li><a href="https://vuejs.org" target="_blank" rel="noopener">Core Docs</a></li>
-      <li><a href="https://forum.vuejs.org" target="_blank" rel="noopener">Forum</a></li>
-      <li><a href="https://chat.vuejs.org" target="_blank" rel="noopener">Community Chat</a></li>
-      <li><a href="https://twitter.com/vuejs" target="_blank" rel="noopener">Twitter</a></li>
-      <li><a href="https://news.vuejs.org" target="_blank" rel="noopener">News</a></li>
-    </ul>
-    <h3>Ecosystem</h3>
-    <ul>
-      <li><a href="https://router.vuejs.org" target="_blank" rel="noopener">vue-router</a></li>
-      <li><a href="https://vuex.vuejs.org" target="_blank" rel="noopener">vuex</a></li>
-      <li><a href="https://github.com/vuejs/vue-devtools#vue-devtools" target="_blank" rel="noopener">vue-devtools</a></li>
-      <li><a href="https://vue-loader.vuejs.org" target="_blank" rel="noopener">vue-loader</a></li>
-      <li><a href="https://github.com/vuejs/awesome-vue" target="_blank" rel="noopener">awesome-vue</a></li>
-    </ul>
+  <div class="capcut-home">
+    <header>
+      <h1>CapCut Premium Accounts</h1>
+      <button class="login-btn" @click="$emit('show-login')">Admin Login</button>
+    </header>
+    <div class="account-list">
+      <h2>Available Accounts</h2>
+  <!-- Removed global type filter -->
+      <div v-if="loading">Loading accounts...</div>
+      <div v-else-if="accounts.length === 0">No accounts available.</div>
+      <div v-else>
+        <div v-for="acc in accounts" :key="acc.id" class="account-card">
+          <div>
+            <strong>Account Type:</strong>
+            <select v-model="accountTypes[acc.id]" @change="updateAccountType(acc.id, accountTypes[acc.id])">
+              <option value="share">Share</option>
+              <option value="private">Private</option>
+            </select>
+          </div>
+          <div>Email: {{ acc.email }}</div>
+          <div>Password: {{ acc.password }}</div>
+          <button @click="copyAccount(acc)">Copy Account</button>
+          <span v-if="copiedId === acc.id" class="used-text">Copied!</span>
+          <div v-if="accountTypes[acc.id] === 'share'">
+            <div>User count: {{ shareCounts[acc.id] || 0 }} / 3</div>
+            <button @click="incrementShare(acc)">Count</button>
+            <button @click="doneShare(acc)" :disabled="(shareCounts[acc.id] || 0) < 3">Done</button>
+          </div>
+          <div v-else>
+            <button @click="donePrivate(acc)">Done</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
+import { db } from '../firebase';
+import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
+
 export default {
-  name: 'HelloWorld',
-  props: {
-    msg: String
+  name: 'CapcutHome',
+  data() {
+    return {
+      accounts: [],
+      loading: true,
+      copiedId: null,
+      accountTypes: {},
+      shareCounts: {},
+      deleteTimers: {}
+    };
+  },
+  async mounted() {
+    await this.fetchAccounts();
+  },
+  // Removed global filter computed property
+  methods: {
+    async fetchAccounts() {
+      this.loading = true;
+      const querySnapshot = await getDocs(collection(db, 'capcut_accounts'));
+      this.accounts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Restore dropdown selection from localStorage
+      const storedTypes = JSON.parse(localStorage.getItem('accountTypes') || '{}');
+      this.accounts.forEach(acc => {
+        this.accountTypes[acc.id] = storedTypes[acc.id] || 'share';
+      });
+      // Restore shareCounts from localStorage
+      const storedCounts = JSON.parse(localStorage.getItem('shareCounts') || '{}');
+      this.accounts.forEach(acc => {
+        this.shareCounts[acc.id] = storedCounts[acc.id] || 0;
+      });
+      // Restore deleteTimers from localStorage
+      const storedTimers = JSON.parse(localStorage.getItem('deleteTimers') || '{}');
+      Object.keys(storedTimers).forEach(accId => {
+        const remaining = storedTimers[accId] - Date.now();
+        if (remaining > 0) {
+          this.deleteTimers[accId] = setTimeout(async () => {
+            await this.deleteAccountById(accId);
+          }, remaining);
+        } else {
+          this.deleteAccountById(accId);
+        }
+      });
+      this.loading = false;
+    },
+    async copyAccount(acc) {
+      const text = `Email: ${acc.email}\nPassword: ${acc.password}`;
+      await navigator.clipboard.writeText(text);
+      this.copiedId = acc.id;
+      setTimeout(() => { this.copiedId = null; }, 1500);
+    },
+    updateAccountType(accId, value) {
+      this.accountTypes[accId] = value;
+      localStorage.setItem('accountTypes', JSON.stringify(this.accountTypes));
+    },
+    incrementShare(acc) {
+      if (!(acc.id in this.shareCounts)) this.shareCounts[acc.id] = 0;
+      if (this.shareCounts[acc.id] < 3) this.shareCounts[acc.id]++;
+      localStorage.setItem('shareCounts', JSON.stringify(this.shareCounts));
+    },
+    async deleteAccountById(accId) {
+      await deleteDoc(doc(db, 'capcut_accounts', accId));
+      await this.fetchAccounts();
+      delete this.deleteTimers[accId];
+      delete this.shareCounts[accId];
+      localStorage.setItem('shareCounts', JSON.stringify(this.shareCounts));
+      const timers = JSON.parse(localStorage.getItem('deleteTimers') || '{}');
+      delete timers[accId];
+      localStorage.setItem('deleteTimers', JSON.stringify(timers));
+    },
+    doneShare(acc) {
+      if (this.deleteTimers[acc.id]) return;
+      const deleteAt = Date.now() + 60000;
+      this.deleteTimers[acc.id] = setTimeout(async () => {
+        await this.deleteAccountById(acc.id);
+      }, 60000); // 1 minute
+      // Save timer to localStorage
+      const timers = JSON.parse(localStorage.getItem('deleteTimers') || '{}');
+      timers[acc.id] = deleteAt;
+      localStorage.setItem('deleteTimers', JSON.stringify(timers));
+      alert('Account will be deleted in 1 minute.');
+    },
+    donePrivate(acc) {
+      if (this.deleteTimers[acc.id]) return;
+      const deleteAt = Date.now() + 60000;
+      this.deleteTimers[acc.id] = setTimeout(async () => {
+        await this.deleteAccountById(acc.id);
+      }, 60000); // 1 minute
+      // Save timer to localStorage
+      const timers = JSON.parse(localStorage.getItem('deleteTimers') || '{}');
+      timers[acc.id] = deleteAt;
+      localStorage.setItem('deleteTimers', JSON.stringify(timers));
+      alert('Account will be deleted in 1 minute.');
+    }
   }
 }
 </script>
 
-<!-- Add "scoped" attribute to limit CSS to this component only -->
 <style scoped>
-h3 {
-  margin: 40px 0 0;
+.capcut-home {
+  max-width: 500px;
+  margin: 40px auto;
+  padding: 20px;
+  background: #fafafa;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px #eee;
 }
-ul {
-  list-style-type: none;
-  padding: 0;
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
 }
-li {
-  display: inline-block;
-  margin: 0 10px;
+.login-btn {
+  background: #42b983;
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
 }
-a {
+.account-list {
+  margin-top: 20px;
+}
+.account-card {
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 4px #eee;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.used-text {
   color: #42b983;
+  margin-left: 10px;
 }
 </style>

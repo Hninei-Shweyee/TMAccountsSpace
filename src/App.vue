@@ -1,15 +1,34 @@
 <template>
-  <img alt="Vue logo" src="./assets/logo.png">
-  <HelloWorld msg="Welcome to Your Vue.js App"/>
+  <div>
+  <HelloWorld v-if="!showLogin && !isLoggedIn" msg="Welcome to Your Vue.js App" @show-login="showLogin = true" />
+  <AdminLogin v-if="showLogin && !isLoggedIn" @login-success="onLoginSuccess" />
+  <InsertAccount v-if="isLoggedIn" />
+  </div>
 </template>
 
 <script>
 import HelloWorld from './components/HelloWorld.vue'
+import AdminLogin from './components/AdminLogin.vue'
+import InsertAccount from './components/InsertAccount.vue'
 
 export default {
   name: 'App',
   components: {
-    HelloWorld
+    HelloWorld,
+    AdminLogin,
+    InsertAccount
+  },
+  data() {
+    return {
+      isLoggedIn: false,
+      showLogin: false
+    };
+  },
+  methods: {
+    onLoginSuccess() {
+      this.isLoggedIn = true;
+      this.showLogin = false;
+    }
   }
 }
 </script>
