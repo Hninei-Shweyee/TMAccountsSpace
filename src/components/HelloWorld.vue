@@ -38,7 +38,7 @@
 
 <script>
 import { db } from '../firebase';
-import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 
 export default {
   name: 'CapcutHome',
@@ -52,53 +52,31 @@ export default {
       deleteTimers: {}
     };
   },
-  async mounted() {
-    await this.fetchAccounts();
-  },
-  // Removed global filter computed property
-  methods: {
-    async fetchAccounts() {
-      this.loading = true;
-      const querySnapshot = await getDocs(collection(db, 'capcut_accounts'));
+  mounted() {
+    this.unsubscribe = onSnapshot(collection(db, 'capcut_accounts'), (querySnapshot) => {
       this.accounts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      // Restore dropdown selection from localStorage
-      const storedTypes = JSON.parse(localStorage.getItem('accountTypes') || '{}');
-      this.accounts.forEach(acc => {
-        this.accountTypes[acc.id] = storedTypes[acc.id] || 'share';
-      });
-      // Restore shareCounts from localStorage
-      const storedCounts = JSON.parse(localStorage.getItem('shareCounts') || '{}');
-      this.accounts.forEach(acc => {
-        this.shareCounts[acc.id] = storedCounts[acc.id] || 0;
-      });
-      // Restore deleteTimers from localStorage
-      const storedTimers = JSON.parse(localStorage.getItem('deleteTimers') || '{}');
-      Object.keys(storedTimers).forEach(accId => {
-        const remaining = storedTimers[accId] - Date.now();
-        if (remaining > 0) {
-          this.deleteTimers[accId] = setTimeout(async () => {
-            await this.deleteAccountById(accId);
-          }, remaining);
-        } else {
-          this.deleteAccountById(accId);
-        }
-      });
       this.loading = false;
-    },
+    });
+  },
+  beforeUnmount() {
+    if (this.unsubscribe) this.unsubscribe();
+  },
+  methods: {
     async copyAccount(acc) {
       const text = `Email: ${acc.email}\nPassword: ${acc.password}`;
       await navigator.clipboard.writeText(text);
       this.copiedId = acc.id;
       setTimeout(() => { this.copiedId = null; }, 1500);
     },
-    updateAccountType(accId, value) {
+    async updateAccountType(accId, value) {
       this.accountTypes[accId] = value;
-      localStorage.setItem('accountTypes', JSON.stringify(this.accountTypes));
+      await updateDoc(doc(db, 'capcut_accounts', accId), { type: value });
     },
-    incrementShare(acc) {
-      if (!(acc.id in this.shareCounts)) this.shareCounts[acc.id] = 0;
-      if (this.shareCounts[acc.id] < 3) this.shareCounts[acc.id]++;
-      localStorage.setItem('shareCounts', JSON.stringify(this.shareCounts));
+    async incrementShare(acc) {
+      if (!acc.count) acc.count = 0;
+      if (acc.count < 3) {
+        await updateDoc(doc(db, 'capcut_accounts', acc.id), { count: acc.count + 1 });
+      }
     },
     async deleteAccountById(accId) {
       await deleteDoc(doc(db, 'capcut_accounts', accId));
