@@ -25,12 +25,13 @@
           <div>Password: {{ acc.password }}</div>
           <button @click="copyAccount(acc)">Copy Account</button>
           <span v-if="copiedId === acc.id" class="used-text">Copied!</span>
+
           <div v-if="accountTypes[acc.id] === 'share'">
-            <div>User count: {{ shareCounts[acc.id] || 0 }} / 3</div>
+            <div>User count: {{ shareCounts[acc.id] !== undefined ? shareCounts[acc.id] : 0 }} / 3</div>
             <button @click="incrementShare(acc)">Count</button>
             <button
               @click="doneShare(acc)"
-              :disabled="(shareCounts[acc.id] || 0) < 3"
+              :disabled="(shareCounts[acc.id] !== undefined ? shareCounts[acc.id] : 0) < 3"
             >
               Done
             </button>
@@ -46,13 +47,7 @@
 
 <script>
 import { db } from '../firebase';
-import {
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  updateDoc
-} from 'firebase/firestore';
+import { collection, deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 
 export default {
   name: 'CapcutHome',
@@ -62,21 +57,25 @@ export default {
       loading: true,
       copiedId: null,
       accountTypes: {},
-      shareCounts: {},
+      shareCounts: {},   // per-account counts (0–3)
       deleteTimers: {}
     };
   },
   mounted() {
-    this.unsubscribe = onSnapshot(
-      collection(db, 'capcut_accounts'),
-      (querySnapshot) => {
-        this.accounts = querySnapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data()
-        }));
-        this.loading = false;
-      }
-    );
+    this.unsubscribe = onSnapshot(collection(db, 'capcut_accounts'), (querySnapshot) => {
+      const docs = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      this.accounts = docs;
+
+      // initialize type + shareCounts from Firestore
+      docs.forEach(acc => {
+        if (!this.accountTypes[acc.id]) {
+          this.accountTypes[acc.id] = acc.type || 'share';
+        }
+        this.shareCounts[acc.id] = acc.count || 0;
+      });
+
+      this.loading = false;
+    });
   },
   beforeUnmount() {
     if (this.unsubscribe) this.unsubscribe();
@@ -86,26 +85,25 @@ export default {
       const text = `Email: ${acc.email}\nPassword: ${acc.password}`;
       await navigator.clipboard.writeText(text);
       this.copiedId = acc.id;
-      setTimeout(() => {
-        this.copiedId = null;
-      }, 1500);
+      setTimeout(() => { this.copiedId = null; }, 1500);
     },
     async updateAccountType(accId, value) {
       this.accountTypes[accId] = value;
       await updateDoc(doc(db, 'capcut_accounts', accId), { type: value });
     },
     async incrementShare(acc) {
-      if (!acc.count) acc.count = 0;
-      if (acc.count < 3) {
-        await updateDoc(doc(db, 'capcut_accounts', acc.id), {
-          count: acc.count + 1
-        });
+      // use our local shareCounts map
+      const current = this.shareCounts[acc.id] || 0;
+      if (current < 3) {
+        const newCount = current + 1;
+        this.shareCounts[acc.id] = newCount;  // update UI immediately
+        await updateDoc(doc(db, 'capcut_accounts', acc.id), { count: newCount }); // persist to Firestore
       }
     },
     async deleteAccountById(accId) {
       await deleteDoc(doc(db, 'capcut_accounts', accId));
 
-      // cleanup local state + localStorage
+      // cleanup local timers + counts
       delete this.deleteTimers[accId];
       delete this.shareCounts[accId];
       localStorage.setItem('shareCounts', JSON.stringify(this.shareCounts));
@@ -113,13 +111,12 @@ export default {
       const timers = JSON.parse(localStorage.getItem('deleteTimers') || '{}');
       delete timers[accId];
       localStorage.setItem('deleteTimers', JSON.stringify(timers));
-
-      // no this.fetchAccounts(): onSnapshot will auto-update accounts
+      // no this.fetchAccounts(): onSnapshot will update accounts automatically
     },
     doneShare(acc) {
       if (this.deleteTimers[acc.id]) return;
-      const deleteAt = Date.now() + 60000;
 
+      const deleteAt = Date.now() + 60000;
       this.deleteTimers[acc.id] = setTimeout(async () => {
         await this.deleteAccountById(acc.id);
       }, 60000); // 1 minute
@@ -132,8 +129,8 @@ export default {
     },
     donePrivate(acc) {
       if (this.deleteTimers[acc.id]) return;
-      const deleteAt = Date.now() + 60000;
 
+      const deleteAt = Date.now() + 60000;
       this.deleteTimers[acc.id] = setTimeout(async () => {
         await this.deleteAccountById(acc.id);
       }, 60000); // 1 minute
