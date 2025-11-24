@@ -6,14 +6,17 @@
     </header>
     <div class="account-list">
       <h2>Available Accounts</h2>
-  <!-- Removed global type filter -->
+      <!-- Removed global type filter -->
       <div v-if="loading">Loading accounts...</div>
       <div v-else-if="accounts.length === 0">No accounts available.</div>
       <div v-else>
         <div v-for="acc in accounts" :key="acc.id" class="account-card">
           <div>
             <strong>Account Type:</strong>
-            <select v-model="accountTypes[acc.id]" @change="updateAccountType(acc.id, accountTypes[acc.id])">
+            <select
+              v-model="accountTypes[acc.id]"
+              @change="updateAccountType(acc.id, accountTypes[acc.id])"
+            >
               <option value="share">Share</option>
               <option value="private">Private</option>
             </select>
@@ -25,7 +28,12 @@
           <div v-if="accountTypes[acc.id] === 'share'">
             <div>User count: {{ shareCounts[acc.id] || 0 }} / 3</div>
             <button @click="incrementShare(acc)">Count</button>
-            <button @click="doneShare(acc)" :disabled="(shareCounts[acc.id] || 0) < 3">Done</button>
+            <button
+              @click="doneShare(acc)"
+              :disabled="(shareCounts[acc.id] || 0) < 3"
+            >
+              Done
+            </button>
           </div>
           <div v-else>
             <button @click="donePrivate(acc)">Done</button>
@@ -38,7 +46,13 @@
 
 <script>
 import { db } from '../firebase';
-import { collection, getDocs, deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import {
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  updateDoc
+} from 'firebase/firestore';
 
 export default {
   name: 'CapcutHome',
@@ -53,10 +67,16 @@ export default {
     };
   },
   mounted() {
-    this.unsubscribe = onSnapshot(collection(db, 'capcut_accounts'), (querySnapshot) => {
-      this.accounts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      this.loading = false;
-    });
+    this.unsubscribe = onSnapshot(
+      collection(db, 'capcut_accounts'),
+      (querySnapshot) => {
+        this.accounts = querySnapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          ...docSnap.data()
+        }));
+        this.loading = false;
+      }
+    );
   },
   beforeUnmount() {
     if (this.unsubscribe) this.unsubscribe();
@@ -66,7 +86,9 @@ export default {
       const text = `Email: ${acc.email}\nPassword: ${acc.password}`;
       await navigator.clipboard.writeText(text);
       this.copiedId = acc.id;
-      setTimeout(() => { this.copiedId = null; }, 1500);
+      setTimeout(() => {
+        this.copiedId = null;
+      }, 1500);
     },
     async updateAccountType(accId, value) {
       this.accountTypes[accId] = value;
@@ -75,45 +97,55 @@ export default {
     async incrementShare(acc) {
       if (!acc.count) acc.count = 0;
       if (acc.count < 3) {
-        await updateDoc(doc(db, 'capcut_accounts', acc.id), { count: acc.count + 1 });
+        await updateDoc(doc(db, 'capcut_accounts', acc.id), {
+          count: acc.count + 1
+        });
       }
     },
     async deleteAccountById(accId) {
       await deleteDoc(doc(db, 'capcut_accounts', accId));
-      await this.fetchAccounts();
+
+      // cleanup local state + localStorage
       delete this.deleteTimers[accId];
       delete this.shareCounts[accId];
       localStorage.setItem('shareCounts', JSON.stringify(this.shareCounts));
+
       const timers = JSON.parse(localStorage.getItem('deleteTimers') || '{}');
       delete timers[accId];
       localStorage.setItem('deleteTimers', JSON.stringify(timers));
+
+      // no this.fetchAccounts(): onSnapshot will auto-update accounts
     },
     doneShare(acc) {
       if (this.deleteTimers[acc.id]) return;
       const deleteAt = Date.now() + 60000;
+
       this.deleteTimers[acc.id] = setTimeout(async () => {
         await this.deleteAccountById(acc.id);
       }, 60000); // 1 minute
-      // Save timer to localStorage
+
       const timers = JSON.parse(localStorage.getItem('deleteTimers') || '{}');
       timers[acc.id] = deleteAt;
       localStorage.setItem('deleteTimers', JSON.stringify(timers));
+
       alert('Account will be deleted in 1 minute.');
     },
     donePrivate(acc) {
       if (this.deleteTimers[acc.id]) return;
       const deleteAt = Date.now() + 60000;
+
       this.deleteTimers[acc.id] = setTimeout(async () => {
         await this.deleteAccountById(acc.id);
       }, 60000); // 1 minute
-      // Save timer to localStorage
+
       const timers = JSON.parse(localStorage.getItem('deleteTimers') || '{}');
       timers[acc.id] = deleteAt;
       localStorage.setItem('deleteTimers', JSON.stringify(timers));
+
       alert('Account will be deleted in 1 minute.');
     }
   }
-}
+};
 </script>
 
 <style scoped>
