@@ -183,15 +183,16 @@ header {
   min-width: 180px;
 }
 .account-type-select {
-  font-size: 1.3rem;
-  padding: 14px 24px;
-  border-radius: 10px;
+  font-size: 1.1rem;
+  padding: 10px 18px;
+  border-radius: 8px;
   border: 2px solid #2563eb;
   background: #eff6ff;
   color: #2563eb;
   font-weight: bold;
-  width: 100%;
-  margin-bottom: 12px;
+  width: 220px;
+  max-width: 100%;
+  margin-bottom: 10px;
 }
 .copy-btn {
   background: #f59e42;
@@ -310,6 +311,13 @@ header {
   }
   .count-done-row {
     gap: 6px;
+  }
+  .account-type-select {
+    font-size: 1.2rem;
+    padding: 12px 0;
+    width: 90vw;
+    max-width: 320px;
+    margin-bottom: 12px;
   }
 }
 @media (max-width: 500px) {
