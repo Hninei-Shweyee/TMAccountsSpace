@@ -32,7 +32,9 @@
               </div>
             </div>
             <div v-else>
-              <button class="big-btn done-btn" @click="donePrivate(acc)">Done</button>
+              <div class="count-done-row">
+                <button class="big-btn done-btn" @click="donePrivate(acc)">Done</button>
+              </div>
             </div>
           </div>
         </div>
@@ -111,31 +113,11 @@ export default {
     },
     doneShare(acc) {
       if (this.deleteTimers[acc.id]) return;
-
-      const deleteAt = Date.now() + 60000;
-      this.deleteTimers[acc.id] = setTimeout(async () => {
-        await this.deleteAccountById(acc.id);
-      }, 60000); // 1 minute
-
-      const timers = JSON.parse(localStorage.getItem('deleteTimers') || '{}');
-      timers[acc.id] = deleteAt;
-      localStorage.setItem('deleteTimers', JSON.stringify(timers));
-
-      alert('Account will be deleted in 1 minute.');
+      this.deleteAccountById(acc.id);
     },
     donePrivate(acc) {
       if (this.deleteTimers[acc.id]) return;
-
-      const deleteAt = Date.now() + 60000;
-      this.deleteTimers[acc.id] = setTimeout(async () => {
-        await this.deleteAccountById(acc.id);
-      }, 60000); // 1 minute
-
-      const timers = JSON.parse(localStorage.getItem('deleteTimers') || '{}');
-      timers[acc.id] = deleteAt;
-      localStorage.setItem('deleteTimers', JSON.stringify(timers));
-
-      alert('Account will be deleted in 1 minute.');
+      this.deleteAccountById(acc.id);
     }
   }
 };
@@ -200,25 +182,25 @@ header {
   align-items: flex-end;
   min-width: 180px;
 }
-.count-done-row {
-  display: flex;
-  flex-direction: row;
-  gap: 16px;
-  margin-top: 8px;
-}
-.big-btn {
-  font-size: 1.2rem;
-  padding: 18px 36px;
+.account-type-select {
+  font-size: 1.3rem;
+  padding: 14px 24px;
   border-radius: 10px;
-  border: none;
+  border: 2px solid #2563eb;
+  background: #eff6ff;
+  color: #2563eb;
   font-weight: bold;
-  box-shadow: 0 2px 8px #dbeafe;
-  cursor: pointer;
-  transition: background 0.2s;
+  width: 100%;
+  margin-bottom: 12px;
 }
 .copy-btn {
   background: #f59e42;
   color: #fff;
+  font-size: 1.3rem;
+  padding: 18px 36px;
+  border-radius: 10px;
+  font-weight: bold;
+  margin-bottom: 12px;
 }
 .copy-btn:hover {
   background: #ea580c;
@@ -236,6 +218,38 @@ header {
 }
 .done-btn:hover {
   background: #1d4ed8;
+}
+.count-done-row {
+  display: flex;
+  flex-direction: row;
+  gap: 24px;
+  justify-content: center;
+  margin-top: 16px;
+}
+.big-btn {
+  font-size: 1.3rem;
+  padding: 18px 36px;
+  border-radius: 10px;
+  font-weight: bold;
+}
+@media (min-width: 601px) {
+  .account-actions {
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+  }
+  .copy-btn {
+    width: 100%;
+    margin-bottom: 18px;
+    margin-top: 12px;
+    display: block;
+  }
+  .count-done-row {
+    flex-direction: row;
+    gap: 48px;
+    justify-content: center;
+    margin-top: 18px;
+  }
 }
 @media (max-width: 1200px) {
   .capcut-home {
@@ -299,19 +313,12 @@ header {
   }
 }
 @media (max-width: 500px) {
-  .capcut-home {
-    padding: 2px;
+  .count-done-row {
+    gap: 16px;
   }
-  .account-card {
-    padding: 6px;
-    gap: 4px;
-  }
-  .big-btn, .login-btn {
-    font-size: 0.95rem;
-    padding: 8px 10px;
-  }
-  h1, h2 {
-    font-size: 1.2rem !important;
+  .big-btn {
+    font-size: 1.15rem;
+    padding: 16px 18px;
   }
 }
 </style>
